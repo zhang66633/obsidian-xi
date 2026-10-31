@@ -1,0 +1,63 @@
+name: Release Obsidian plugin
+
+on:
+  push:
+    tags:
+      - "*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release (for example 0.5.0)
+        required: true
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      TAG: ${{ github.event.inputs.tag || github.ref_name }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci
+
+      - name: Verify tag matches manifest
+        run: |
+          version="$(node -p "require('./manifest.json').version")"
+          if [ "$TAG" != "$version" ]; then
+            echo "Tag ($TAG) does not match manifest.json version ($version)" >&2
+            exit 1
+          fi
+
+      - name: Check, test and build
+        run: npm run check
+
+      - name: Generate artifact attestation
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            main.js
+            manifest.json
+            styles.css
+
+      - name: Create draft release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$TAG" \
+            --draft \
+            --title "Xi Qwen $TAG" \
+            --generate-notes \
+            main.js manifest.json styles.css

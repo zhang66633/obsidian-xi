@@ -1,9 +1,10 @@
 {
 	"id": "xi-qwen",
 	"name": "Xi Qwen",
-	"version": "0.4.2",
+	"version": "0.5.0",
 	"minAppVersion": "1.13.0",
-	"description": "Bilingual Qwen assistant that reads your vault: understand, organize, and integrate your notes.",
+	"description": "Bilingual Qwen assistant for your vault: chat with citations, organize notes, and merge ideas. Works with any OpenAI-compatible endpoint.",
 	"author": "Zhe",
+	"authorUrl": "https://github.com/zhang66633",
 	"isDesktopOnly": false
 }

@@ -1,24 +1,29 @@
-/* 灵犀 Lingxi 版本号同步脚本：把 manifest.json 的 version 写入 versions.json，
- * 映射到 minAppVersion。来自官方 obsidian-sample-plugin 的同名脚本，
- * 发布前 `npm version patch|minor|major` 会自动调用。 */
-import { readFileSync, writeFileSync } from "fs";
+/*
+ * 希XI 版本号同步脚本（npm version 生命周期）
+ *
+ * 背景：0.4.x 时期 package.json 停在 0.1.0、manifest 已到 0.4.2——三处版本号各自漂移，
+ * 发布时容易打错 tag。这里让 npm version 成为唯一入口：
+ *   npm version 0.5.0 --no-git-tag-version
+ * 会先写 package.json / package-lock.json，再触发本脚本写 manifest.json 与 versions.json。
+ */
+import { readFileSync, writeFileSync } from "node:fs";
 
 const targetVersion = process.env.npm_package_version;
 
 if (!targetVersion) {
-	throw new Error("npm_package_version is not set; run via npm version");
+  throw new Error("npm_package_version is not set; run via npm version");
 }
 
-// read minAppVersion from manifest.json
 const manifest = JSON.parse(readFileSync("manifest.json", "utf8"));
-const { minAppVersion } = manifest;
+manifest.version = targetVersion;
+writeFileSync("manifest.json", `${JSON.stringify(manifest, null, "\t")}\n`);
 
-// update versions.json with target version and minAppVersion
+const { minAppVersion } = manifest;
 let versions = {};
 try {
-	versions = JSON.parse(readFileSync("versions.json", "utf8"));
+  versions = JSON.parse(readFileSync("versions.json", "utf8"));
 } catch {
-	// ignore empty file
+  // 空文件/首次发布：忽略，下面重建
 }
 versions[targetVersion] = minAppVersion;
-writeFileSync("versions.json", JSON.stringify(versions, null, "\t"));
+writeFileSync("versions.json", `${JSON.stringify(versions, null, "\t")}\n`);
