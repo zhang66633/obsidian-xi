@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildNoteVectors, findDuplicatePairs, relatedNotes } from "./related";
+import { buildNoteVectors, findDuplicatePairs, makeSnippet, relatedNotes } from "./related";
 import type { Chunk } from "./index";
 import { VectorStore } from "./vectorStore";
 
@@ -73,5 +73,18 @@ describe("findDuplicatePairs", () => {
     const pairs = findDuplicatePairs(notes, 0.99);
     expect(pairs).toHaveLength(1);
     expect(pairs[0]!.score).toBeCloseTo(1, 6);
+  });
+});
+
+describe("makeSnippet", () => {
+  it("折叠空白并在超长时截断加省略号", () => {
+    expect(makeSnippet("  第一行\n\n第二行  ")).toBe("第一行 第二行");
+    const long = makeSnippet("x".repeat(200), 20);
+    expect(long).toHaveLength(20);
+    expect(long.endsWith("…")).toBe(true);
+  });
+
+  it("去掉标题、双链、粗体与行内代码标记", () => {
+    expect(makeSnippet("### 阶段\n看 [[Z值]] 和 [[路径|别名]]，**重点** `code`")).toBe("阶段 看 Z值 和 别名，重点 code");
   });
 });

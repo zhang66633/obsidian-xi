@@ -45,6 +45,26 @@ export function buildNoteVectors(chunks: Chunk[], store: VectorStore): NoteVecto
 export interface RelatedNote {
   path: string;
   score: number;
+  /** 最匹配的 chunk 的标题路径（可选，供 UI 展示） */
+  heading?: string;
+  /** 最匹配 chunk 的压缩摘要（可选，列表里给用户一个「为什么相关」） */
+  snippet?: string;
+  /** 最匹配的 chunk id（可选，便于跳转/引用） */
+  chunkId?: string;
+}
+
+/** 把 chunk 正文压成一行摘要；超长截断并加省略号。
+ *  顺手去掉 Markdown 标题/双链/强调标记，避免列表里出现一堆语法噪声。 */
+export function makeSnippet(text: string, maxChars = 160): string {
+  const clean = text
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_m, path: string, alias?: string) => alias ?? path)
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/`{1,3}([^`]+)`{1,3}/g, "$1")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (clean.length <= maxChars) return clean;
+  return `${clean.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`;
 }
 
 /** 查询向量 → 相关笔记（按代表向量相似度，排除自身，阈值过滤） */

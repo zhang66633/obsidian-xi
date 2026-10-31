@@ -58,4 +58,11 @@ describe("parseTagSuggestions", () => {
     expect(parseTagSuggestions("[broken")).toEqual([]);
     expect(parseTagSuggestions("{'not':'array'}")).toEqual([]);
   });
+
+  it("推理前缀里的示例数组不会抢答", () => {
+    expect(parseTagSuggestions('我需要输出 ["示例"] 这样的数组。\n最终：["注意力","学习方法"]')).toEqual([
+      "注意力",
+      "学习方法",
+    ]);
+  });
 });

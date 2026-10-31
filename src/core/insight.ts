@@ -60,10 +60,12 @@ export function buildMergePrompt(notes: NoteInput[], topic: string | undefined, 
     lang === "zh"
       ? "把下面若干篇笔记合并成一篇结构化的合并草稿（Markdown）。" +
         "要求：按主题重组而非按来源堆叠；每个观点后用 (来源: 笔记路径) 标注；" +
-        "冲突处并列呈现并标注分歧；结尾留「待澄清问题」小节。只输出 Markdown 正文。"
+        "冲突处并列呈现并标注分歧；结尾留「待澄清问题」小节。" +
+        "第一行必须是 `# ` 或 `## ` 开头的标题；只输出 Markdown 正文，不要输出思考过程。"
       : "Merge the notes below into one structured Markdown draft. " +
         "Reorganize by theme, not by source; annotate each point with (source: path); " +
-        "present conflicts side by side; end with an Open Questions section. Markdown body only.";
+        "present conflicts side by side; end with an Open Questions section. " +
+        "The first line must be a `# ` or `## ` heading; output the Markdown body only, no reasoning.";
   const topicLine = topic ? (lang === "zh" ? `主题：${topic}\n\n` : `Topic: ${topic}\n\n`) : "";
   const body = notes.map((n, i) => `### ${i + 1}. ${n.path}\n${n.text.slice(0, 4000)}`).join("\n\n");
   return `${topicLine}${header}\n\n${body}`;
@@ -71,7 +73,14 @@ export function buildMergePrompt(notes: NoteInput[], topic: string | undefined, 
 
 export function parseMergeDraft(text: string): string {
   const trimmed = text.trim();
-  return trimmed === "" ? "" : trimmed;
+  if (trimmed === "") return "";
+  // 推理模型常把「我们要输出…」的思考写在正文前；从第一个 Markdown 标题开始取
+  const heading = /^#{1,6}\s/m.exec(trimmed);
+  if (heading && heading.index > 0) {
+    const body = trimmed.slice(heading.index).trim();
+    if (body !== "") return body;
+  }
+  return trimmed;
 }
 
 /* ---------------- 知识缺口 ---------------- */
@@ -105,7 +114,17 @@ export function parseGapResult(text: string): GapResult {
 
 /* ---------------- 编排（transport 注入，可单测） ---------------- */
 
-export async function runCompare(transport: Transport, cfg: InsightConfig, notes: NoteInput[]): Promise<CompareResult> {
+export interface CompareOutcome {
+  result: CompareResult;
+  /** 模型原文：结构解析为空时 UI 可以回退展示，而不是只给一句「没有有效内容」 */
+  raw: string;
+}
+
+export async function runCompareDetailed(
+  transport: Transport,
+  cfg: InsightConfig,
+  notes: NoteInput[],
+): Promise<CompareOutcome> {
   const lang = cfg.language ?? "zh";
   const messages: ChatMessage[] = [
     {
@@ -123,7 +142,11 @@ export async function runCompare(transport: Transport, cfg: InsightConfig, notes
     messages,
     { temperature: 0.3, maxTokens: cfg.maxOutputTokens ?? 4096 },
   );
-  return parseCompareResult(raw);
+  return { result: parseCompareResult(raw), raw: raw.trim() };
+}
+
+export async function runCompare(transport: Transport, cfg: InsightConfig, notes: NoteInput[]): Promise<CompareResult> {
+  return (await runCompareDetailed(transport, cfg, notes)).result;
 }
 
 export async function runMerge(
@@ -152,12 +175,17 @@ export async function runMerge(
   return parseMergeDraft(raw);
 }
 
-export async function runGaps(
+export interface GapOutcome {
+  result: GapResult;
+  raw: string;
+}
+
+export async function runGapsDetailed(
   transport: Transport,
   cfg: InsightConfig,
   question: string,
   context: string,
-): Promise<GapResult> {
+): Promise<GapOutcome> {
   const lang = cfg.language ?? "zh";
   const messages: ChatMessage[] = [
     {
@@ -175,5 +203,14 @@ export async function runGaps(
     messages,
     { temperature: 0.3, maxTokens: cfg.maxOutputTokens ?? 2048 },
   );
-  return parseGapResult(raw);
+  return { result: parseGapResult(raw), raw: raw.trim() };
+}
+
+export async function runGaps(
+  transport: Transport,
+  cfg: InsightConfig,
+  question: string,
+  context: string,
+): Promise<GapResult> {
+  return (await runGapsDetailed(transport, cfg, question, context)).result;
 }

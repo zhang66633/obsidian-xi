@@ -2,9 +2,11 @@
  * 希XI — 标签建议的提示词构造与输出解析（纯 TS）
  *
  * 设计：优先复用库内已有标签（保持标签体系收敛），确有必要才允许新标签。
- * 模型输出约定为一个 JSON 数组；解析宽容（围栏/散文里的数组都能捞），
+ * 模型输出约定为一个 JSON 数组；解析宽容（围栏/散文/推理前缀里的数组都能捞），
  * 但过滤严格（去 #、去重、限量、可选只允许词表内）。
  */
+
+import { extractJsonArray } from "./json";
 
 export interface TagVocabEntry {
   tag: string;
@@ -55,7 +57,15 @@ export function buildTagSystemPrompt(lang: "zh" | "en"): string {
 /** 从模型输出里解析标签：宽容提取数组（跳过空数组），严格过滤结果 */
 export function parseTagSuggestions(text: string, opts: { vocabulary?: string[]; maxTags?: number } = {}): string[] {
   const { maxTags = 8 } = opts;
-  // 模型可能先抒情再给答案：把所有 [...] 都试一遍，第一个非空且合法的算数
+
+  // 优先用「最后一个可解析数组」：推理模型常在正文前贴一个示例数组
+  const extracted = extractJsonArray(text);
+  if (extracted) {
+    const out = sanitizeTags(extracted, maxTags);
+    if (out.length > 0) return out;
+  }
+
+  // 兜底：数组被围栏/散文切碎时，逐个 [...] 尝试
   const candidates = text.match(/\[[\s\S]*?\]/g) ?? [];
   for (const candidate of candidates) {
     let parsed: unknown;
@@ -65,19 +75,24 @@ export function parseTagSuggestions(text: string, opts: { vocabulary?: string[];
       continue;
     }
     if (!Array.isArray(parsed)) continue;
-    const out: string[] = [];
-    const seen = new Set<string>();
-    for (const item of parsed) {
-      if (typeof item !== "string") continue;
-      const tag = item.trim().replace(/^#+/, "").replace(/\s+/g, "-");
-      if (tag === "" || tag.length > 40) continue;
-      const key = tag.toLowerCase();
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push(tag);
-      if (out.length >= maxTags) break;
-    }
+    const out = sanitizeTags(parsed, maxTags);
     if (out.length > 0) return out;
   }
   return [];
+}
+
+function sanitizeTags(parsed: unknown[], maxTags: number): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const item of parsed) {
+    if (typeof item !== "string") continue;
+    const tag = item.trim().replace(/^#+/, "").replace(/\s+/g, "-");
+    if (tag === "" || tag.length > 40) continue;
+    const key = tag.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(tag);
+    if (out.length >= maxTags) break;
+  }
+  return out;
 }

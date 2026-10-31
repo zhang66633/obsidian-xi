@@ -7,7 +7,9 @@ import {
   parseGapResult,
   parseMergeDraft,
   runCompare,
+  runCompareDetailed,
   runGaps,
+  runGapsDetailed,
   runMerge,
 } from "./insight";
 import type { Transport } from "./llm";
@@ -65,9 +67,10 @@ describe("解析", () => {
     expect(parseCompareResult('{"consensus":"不是数组"}').consensus).toEqual([]);
   });
 
-  it("合并草稿：非空直出，空串防空", () => {
+  it("合并草稿：非空直出，空串防空，思考前缀会被剪掉", () => {
     expect(parseMergeDraft("  # 草稿  ")).toBe("# 草稿");
     expect(parseMergeDraft("   ")).toBe("");
+    expect(parseMergeDraft("我们需要输出合并草稿。\n\n# 合并草稿\n内容")).toBe("# 合并草稿\n内容");
   });
 
   it("缺口：解析 gaps/nextSteps，坏输入不崩", () => {
@@ -98,5 +101,17 @@ describe("编排（fake transport）", () => {
   it("模型胡言乱语 → 空结构而非崩溃", async () => {
     const r = await runCompare(fakeChat("我不会输出 JSON"), cfg, notes);
     expect(r).toEqual({ consensus: [], divergence: [], complementary: [] });
+  });
+
+  it("runCompareDetailed：保留原文，供 UI 回退展示", async () => {
+    const out = await runCompareDetailed(fakeChat("先分析一下…\n没有 JSON"), cfg, notes);
+    expect(out.result).toEqual({ consensus: [], divergence: [], complementary: [] });
+    expect(out.raw).toContain("先分析一下");
+  });
+
+  it("runGapsDetailed：保留原文，供 UI 回退展示", async () => {
+    const out = await runGapsDetailed(fakeChat("没有 JSON"), cfg, "问题", "上下文");
+    expect(out.result).toEqual({ gaps: [], nextSteps: [] });
+    expect(out.raw).toBe("没有 JSON");
   });
 });

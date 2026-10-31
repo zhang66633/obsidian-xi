@@ -13,10 +13,10 @@ import type { Chunk } from "./index";
 import { NoteIndex } from "./index";
 import type { FileInput as FileInputLite, IndexData } from "./index";
 import type { VectorStoreData, VectorStore } from "./vectorStore";
-import { VectorStore as VectorStoreClass } from "./vectorStore";
+import { VectorStore as VectorStoreClass, cosineSimilarity } from "./vectorStore";
 import { buildRagContext, retrieveTopK } from "./rag";
 import type { RagContext, RetrievalHit } from "./rag";
-import { buildNoteVectors, findDuplicatePairs, relatedNotes as rankRelated } from "./related";
+import { buildNoteVectors, findDuplicatePairs, makeSnippet, relatedNotes as rankRelated } from "./related";
 import type { DuplicatePair, RelatedNote } from "./related";
 import { buildTagSystemPrompt, buildTagUserPrompt, extractTagVocabulary, parseTagSuggestions } from "./tagSuggest";
 import { chatCompletion, embedTexts } from "./llm";
@@ -324,11 +324,35 @@ export class VaultIndexer {
     if (text.trim() === "") return [];
     const query = await this.embedText(text.slice(0, 8000));
     const notes = buildNoteVectors(this.index.allChunks(), this.store);
-    return rankRelated(query, notes, {
+    const ranked = rankRelated(query, notes, {
       topN: opts.topN ?? 10,
       threshold: opts.threshold ?? this.cfg.similarityThreshold,
       excludePath: notePath,
     });
+    return ranked.map((note) => this.attachSnippet(note, query));
+  }
+
+  /** 给相关笔记补上「最匹配的 chunk」摘要，列表里能看到为什么相关 */
+  private attachSnippet(note: RelatedNote, query: number[]): RelatedNote {
+    let bestScore = -Infinity;
+    let best: Chunk | undefined;
+    for (const chunk of this.index.allChunks()) {
+      if (chunk.path !== note.path) continue;
+      const vector = this.store.get(chunk.id);
+      if (!vector) continue;
+      const score = cosineSimilarity(query, vector);
+      if (!best || score > bestScore) {
+        best = chunk;
+        bestScore = score;
+      }
+    }
+    if (!best) return note;
+    return {
+      ...note,
+      heading: best.heading === "" ? undefined : best.heading,
+      snippet: makeSnippet(best.text),
+      chunkId: best.id,
+    };
   }
 
   /** 近似重复笔记对 */

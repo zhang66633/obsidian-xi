@@ -239,6 +239,21 @@ describe("Phase 3 整理能力", () => {
     expect([...scores].sort((x, y) => y - x)).toEqual(scores);
   });
 
+  it("relatedNotesFor：补最匹配 chunk 的 heading/snippet", async () => {
+    const port = new FakePort();
+    seed(port, "a.md", 1, "# 注意力\n注意力是有限的认知资源");
+    seed(port, "b.md", 1, "# 睡眠\n睡眠影响注意力");
+    const idx = new VaultIndexer(port, cfgWithChat(), makeTransport());
+    await idx.syncAll();
+    const rel = await idx.relatedNotesFor("a.md", { topN: 5, threshold: 0 });
+    expect(rel.length).toBeGreaterThan(0);
+    const first = rel[0]!;
+    expect(first.path).toBe("b.md");
+    expect(first.heading).toBe("睡眠");
+    expect(first.snippet).toContain("睡眠");
+    expect(first.chunkId).toBeTruthy();
+  });
+
   it("relatedNotesFor：空库直接空", async () => {
     const idx = new VaultIndexer(new FakePort(), cfgWithChat(), makeTransport());
     expect(await idx.relatedNotesFor("a.md")).toEqual([]);
