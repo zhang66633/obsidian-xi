@@ -20,8 +20,8 @@ One sidebar, three tabs:
 | Tab | Tools | Writes to your notes? |
 |---|---|---|
 | **Chat** | Multi-session chat (new / switch / rename / delete, survives restarts); vault-wide Q&A with clickable `[1][2]` citation chips; ask about the current note or a selection; one-click note anatomy (summary / key concepts / open questions); Markdown answers with a copy button | No |
-| **Organize** | Related notes (similarity-scored, one-click `[[link]]`), semantic search (chunk-level hits), tag suggestions that prefer your existing tag vocabulary, near-duplicate detection | Tags only — automatically inside whitelisted folders, one click elsewhere |
-| **Integrate** | Compare 2–10 notes (consensus / divergence / complementary), merge notes into a structured draft with per-point sources, knowledge-gap analysis | Only when you click “create note” |
+| **Organize** | Index health banner (sync/rebuild), related notes with heading + snippet + score, semantic search result cards, tag suggestions with current tags and batch apply, near-duplicate detection with open-both/copy actions | Tags only — automatically inside whitelisted folders, one click elsewhere |
+| **Integrate** | Note picker with selected counter / select-all / clear, compare 2–10 notes (consensus / divergence / complementary), editable merge draft with per-point sources, knowledge-gap analysis with retrieved-context count, raw-model fallback when JSON parsing fails | Only when you click “create note” |
 
 UI strings are fully bilingual — switch in the sidebar header or in settings (it can also follow your Obsidian locale).
 
@@ -70,16 +70,25 @@ UI strings are fully bilingual — switch in the sidebar header or in settings (
   suggestion you apply yourself; comparison/merge notes are created only when you click the button.
 - No files outside the vault are accessed.
 
-## What's new in 0.5.0
+## What's new in 0.6.0
 
-- **Incremental indexing**: unchanged notes are no longer re-read on every edit; a 3-second
-  debounce plus mtime checks keep typing cheap.
-- **Declarative settings** (Obsidian 1.13 settings search), working language switching,
-  and properly clamped token budgets.
-- **Markdown answers**, copy button, note anatomy command, and a real “ask about selection” command.
-- **More robust networking**: request timeouts, embedding retries on 429/5xx, partial-index
-  persistence so one failed batch doesn’t throw away the whole sync.
-- **Bilingual modals**, delete confirmation, and a cleaner mobile layout.
+- **Organize is no longer a row of bare buttons**: an index health banner shows notes/chunks/vectors
+  with sync + rebuild actions; related notes and semantic search return cards with the best-matching
+  snippet and heading; current tags are visible and can be applied in bulk.
+- **Integrate got a real selection/result loop**: the picker shows how many notes you selected,
+  supports select-all/clear and a 2-note minimum; results keep source chips; merge drafts are
+  editable before saving; saved notes include `created` and `source` frontmatter.
+- **Reasoning-model fix**: the model often prints a schema example before the real JSON. Extraction
+  now returns the last valid object, so Compare / Gaps / Anatomy no longer come back empty; if a
+  model still refuses to produce JSON, the raw output is shown and can be saved.
+- 151 unit tests, lint clean, CI + tag-driven release with build provenance attestation.
+
+## What changed in 0.5.0
+
+- Incremental indexing (mtime check; manual rebuild still does a full read).
+- Declarative settings (Obsidian 1.13), working language switching, clamped token budgets.
+- Markdown answers with copy, selection Q&A, note anatomy, bilingual modals, delete confirmation.
+- Request timeouts, embedding retries, partial-index persistence.
 
 ## Development
 
@@ -145,9 +154,12 @@ MIT © Zhe
 - **对话**：多会话管理（新建/切换/重命名/删除，重启后恢复，每个会话记住自己的上下文范围）；
   全库问答带可点击的 `[1][2]` 引用角标；也可以问当前笔记、解释选中文字，
   或一键做「笔记解剖」（摘要 / 关键概念 / 待解问题）。回答按 Markdown 渲染，可一键复制。
-- **整理**：相关笔记（带相似度，一键插入双链）、语义搜索（按段落命中）、
-  标签建议（优先复用已有标签，白名单文件夹内自动应用）、近似重复检测。
-- **整合**：多篇对比（共识/分歧/互补）、主题合并（带来源标注的草稿）、知识缺口分析。
+- **整理**：顶部显示索引健康度（篇/块/向量，可同步或重建）；相关笔记与语义搜索返回带
+  标题、摘要和分数的卡片；标签建议显示当前标签并支持批量应用；近似重复对可一键打开两篇/
+  复制路径。
+- **整合**：选择器显示已选数量，支持全选/清空与至少 2 篇限制；对比/合并/缺口结果常驻
+  来源 chips；合并草稿可直接编辑后再创建笔记（自动写 `created` + `source` frontmatter）；
+  模型不按 JSON 输出时展示原文并可保存。
 
 **隐私与联网**：笔记只会发送到你亲自配置的接口；无遥测、无账号、无广告。
 API Key 保存在本机插件目录的 `data.json`，索引与会话缓存在同目录，删掉可重建。

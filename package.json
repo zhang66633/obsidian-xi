@@ -1,6 +1,6 @@
 {
 	"name": "xi-qwen",
-	"version": "0.5.0",
+	"version": "0.6.0",
 	"description": "希XI (Xi Qwen) — bilingual Qwen assistant for Obsidian: understand, organize and integrate your vault",
 	"main": "main.js",
 	"type": "module",

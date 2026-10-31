@@ -4,6 +4,36 @@ All notable changes to Xi Qwen are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/);
 versioning follows [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] — 2026-10-31
+
+### Added
+
+- **Organize**: index health banner (notes / chunks / vectors, sync + rebuild), result cards
+  with heading and snippet, current tags with batch apply, duplicate-pair open/copy actions.
+- **Integrate**: picker with selected counter, select-all/clear and a 2-note minimum; source
+  chips for every result; raw-model fallback when JSON structure cannot be parsed; editable
+  merge draft; saved notes include `created` and `source` frontmatter; gap analysis shows how
+  many excerpts were retrieved.
+- `makeSnippet` strips Markdown headings, wikilinks, bold and inline-code markers so result
+  lists read cleanly.
+- Snippet enrichment for related notes: each result now shows the best-matching chunk.
+
+### Fixed
+
+- JSON extraction took the first `{` to the last `}`, which broke whenever a reasoning model
+  printed a schema example before the real answer. It now scans candidates and returns the
+  last valid object; compare / gaps / anatomy parse correctly again.
+- Merge drafts no longer start with the model’s reasoning preamble; the parser cuts at the
+  first Markdown heading.
+- Tag suggestions prefer the last valid JSON array, so an example array in the reasoning
+  cannot win over the actual tags.
+- Index status no longer shows a stale “index ready” line after the sync finishes.
+
+### Internal
+
+- Added `extractJsonArray`, `runCompareDetailed`, `runGapsDetailed` and 10 new tests
+  (141 → 151), including a regression for reasoning-model JSON parsing.
+
 ## [0.5.0] — 2026-10-31
 
 ### Added
@@ -68,6 +98,7 @@ versioning follows [Semantic Versioning](https://semver.org/).
 
 - Initial chat / organize / integrate feature set.
 
+[0.6.0]: https://github.com/zhang66633/obsidian-xi/releases/tag/0.6.0
 [0.5.0]: https://github.com/zhang66633/obsidian-xi/releases/tag/0.5.0
 [0.4.2]: https://github.com/zhang66633/obsidian-xi/releases/tag/0.4.2
 [0.4.1]: https://github.com/zhang66633/obsidian-xi/releases/tag/0.4.1
