@@ -64,4 +64,14 @@ describe("findDuplicatePairs", () => {
     const notes = buildNoteVectors([chunk("a#1", "a.md"), chunk("b#1", "b.md")], store({ "a#1": [1, 0], "b#1": [0, 1] }));
     expect(findDuplicatePairs(notes, 0.9)).toEqual([]);
   });
+
+  it("回归：同方向不同模长仍是重复（余弦对缩放不敏感，不能用模长剪枝）", () => {
+    const notes = buildNoteVectors(
+      [chunk("a#1", "a.md"), chunk("b#1", "b.md")],
+      store({ "a#1": [0.01, 0], "b#1": [100, 0] }),
+    );
+    const pairs = findDuplicatePairs(notes, 0.99);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0]!.score).toBeCloseTo(1, 6);
+  });
 });

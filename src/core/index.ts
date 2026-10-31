@@ -121,8 +121,14 @@ export class NoteIndex {
   private notes = new Map<string, NoteEntry>();
   private chunks = new Map<string, Chunk>();
 
-  /** 增量同步：返回新增/更新/删除/未变的文件清单 */
-  sync(files: FileInput[]): SyncResult {
+  /**
+   * 增量同步：返回新增/更新/删除/未变的文件清单。
+   *
+   * allPaths：本次扫描到的全部文件路径。传入时只处理 files 里真正读过的文件，
+   * 未提供的路径保持原样（供「mtime 未变就不读」的增量同步使用）；
+   * 不在 allPaths 里的旧笔记才判删除。
+   */
+  sync(files: FileInput[], options: { allPaths?: string[] } = {}): SyncResult {
     const result: SyncResult = { added: [], updated: [], removed: [], unchanged: 0 };
     const seen = new Set<string>();
 
@@ -131,6 +137,12 @@ export class NoteIndex {
       const hash = hashText(file.content);
       const existing = this.notes.get(file.path);
       if (existing && existing.mtime === file.mtime && existing.hash === hash) {
+        result.unchanged++;
+        continue;
+      }
+      // mtime 变了但内容没变（touch / 同步工具重写元数据）：只更新 mtime，不重切不重嵌
+      if (existing && existing.hash === hash) {
+        existing.mtime = file.mtime;
         result.unchanged++;
         continue;
       }
@@ -149,8 +161,9 @@ export class NoteIndex {
       (existing ? result.updated : result.added).push(file.path);
     }
 
+    const alive = options.allPaths ? new Set(options.allPaths) : seen;
     for (const path of [...this.notes.keys()]) {
-      if (!seen.has(path)) {
+      if (!alive.has(path)) {
         this.removeChunksOf(path);
         this.notes.delete(path);
         result.removed.push(path);
@@ -195,6 +208,12 @@ export class NoteIndex {
   /** 该文件当前的全部 chunk id（供向量缓存清理） */
   chunkIdsOf(path: string): string[] {
     return this.notes.get(path)?.chunkIds ?? [];
+  }
+
+  /** 该文件上次索引时的 mtime/hash（增量同步判断是否要重读） */
+  noteMeta(path: string): { mtime: number; hash: string } | undefined {
+    const entry = this.notes.get(path);
+    return entry ? { mtime: entry.mtime, hash: entry.hash } : undefined;
   }
 
   toJSON(): IndexData {

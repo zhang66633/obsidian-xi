@@ -42,6 +42,8 @@ const TITLE_MAX = 24;
 export class SessionStore {
   private sessions = new Map<string, ChatSession>();
   private activeId: string | null = null;
+  /** 写盘串行链：避免「先发起的旧快照后落盘」覆盖新状态 */
+  private writeChain: Promise<void> = Promise.resolve();
 
   constructor(
     private persist: PersistFn,
@@ -166,13 +168,37 @@ export class SessionStore {
     return true;
   }
 
-  private async save(): Promise<void> {
-    const data: SessionStoreData = {
+  /** 把当前状态排队落盘；失败不阻塞聊天，但保留写链顺序 */
+  private save(): Promise<void> {
+    const data = this.snapshot();
+    this.writeChain = this.writeChain.then(async () => {
+      try {
+        await this.persist(data);
+      } catch {
+        // 会话落盘失败不应打断聊天；下一次变更会写新快照
+      }
+    });
+    return this.writeChain;
+  }
+
+  /** 写入前做浅层深拷贝：排队期间用户继续发消息，不能让旧快照指向可变对象 */
+  private snapshot(): SessionStoreData {
+    return {
       version: STORE_VERSION,
       activeId: this.activeId,
-      sessions: this.list(),
+      sessions: this.list().map((s) => ({
+        ...s,
+        messages: s.messages.map((m) => ({
+          ...m,
+          citations: m.citations?.map((c) => ({ ...c })),
+        })),
+      })),
     };
-    await this.persist(data);
+  }
+
+  /** 等待已排队的写入落盘（测试 / 卸载前用） */
+  async flush(): Promise<void> {
+    await this.writeChain;
   }
 }
 
@@ -180,10 +206,11 @@ function defaultId(): string {
   return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-/** 列表展示用：标题或占位 + 时间 */
+/** 列表展示用：有标题用标题（已是会话内容），空标题用占位 + 时间便于区分 */
 export function sessionLabel(session: ChatSession, emptyText: string): string {
+  if (session.title !== "") return session.title;
   const time = new Date(session.updatedAt);
   const hh = String(time.getHours()).padStart(2, "0");
   const mm = String(time.getMinutes()).padStart(2, "0");
-  return `${session.title === "" ? emptyText : session.title} · ${hh}:${mm}`;
+  return `${emptyText} ${hh}:${mm}`;
 }

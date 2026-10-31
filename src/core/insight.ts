@@ -8,6 +8,7 @@
 
 import { chatCompletion } from "./llm";
 import type { ChatMessage, Transport } from "./llm";
+import { asStringArray, extractJsonObject } from "./json";
 
 export interface NoteInput {
   path: string;
@@ -175,26 +176,4 @@ export async function runGaps(
     { temperature: 0.3, maxTokens: cfg.maxOutputTokens ?? 2048 },
   );
   return parseGapResult(raw);
-}
-
-/* ---------------- 内部工具 ---------------- */
-
-/** 从模型输出里抠第一个 JSON 对象（围栏/散文/裸 JSON 均可） */
-function extractJsonObject(text: string): Record<string, unknown> | null {
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) return null;
-  try {
-    const parsed: unknown = JSON.parse(text.slice(start, end + 1));
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null;
-  } catch {
-    return null;
-  }
-}
-
-function asStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) return [];
-  return value.filter((v): v is string => typeof v === "string" && v.trim() !== "");
 }

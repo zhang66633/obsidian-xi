@@ -98,6 +98,9 @@ function errorMessageFromPayload(json: unknown): string | undefined {
  * 解析 /chat/completions 响应，取出 assistant 文本。
  * 推理模型在 max_tokens 耗尽时会返回 content: null —— 这是显式错误，
  * 不能当成空答案存下来（SJS 项目踩过的坑）。
+ *
+ * 兼容两种 content 形态：字符串（OpenAI 经典）与 parts 数组
+ * （`[{type:"text", text:"..."}]`，部分 OpenAI 兼容网关会这么回）。
  */
 export function parseChatContent(json: unknown): string {
   if (!json || typeof json !== "object") {
@@ -111,8 +114,9 @@ export function parseChatContent(json: unknown): string {
     .choices;
   const first = choices && choices[0];
   const content = first && first.message ? first.message.content : undefined;
-  if (typeof content === "string") {
-    return content;
+  const text = contentToText(content);
+  if (text !== null) {
+    return text;
   }
   if (content === null || content === undefined) {
     const finish = first ? String(first.finish_reason ?? "unknown") : "unknown";
@@ -123,6 +127,28 @@ export function parseChatContent(json: unknown): string {
     );
   }
   throw new LlmError("Unexpected chat response shape", 200);
+}
+
+/** content 可能是 string / parts 数组 / 单个 part 对象；空数组返回 null */
+function contentToText(content: unknown): string | null {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    const parts: string[] = [];
+    for (const part of content) {
+      const text = partToText(part);
+      if (text !== null) parts.push(text);
+    }
+    return parts.length > 0 ? parts.join("") : null;
+  }
+  return partToText(content);
+}
+
+function partToText(part: unknown): string | null {
+  if (typeof part === "string") return part;
+  if (part && typeof part === "object" && typeof (part as { text?: unknown }).text === "string") {
+    return (part as { text: string }).text;
+  }
+  return null;
 }
 
 export interface EmbeddingResult {
@@ -156,12 +182,25 @@ export function parseEmbeddings(json: unknown): number[][] {
 
 /* ---------------- 高层调用 ---------------- */
 
-export async function chatCompletion(
+export interface ChatReply {
+  text: string;
+  /** OpenAI 的 finish_reason；length 表示被 max_tokens 截断 */
+  finishReason: string | null;
+}
+
+export function getFinishReason(json: unknown): string | null {
+  if (!json || typeof json !== "object") return null;
+  const choices = (json as { choices?: Array<{ finish_reason?: unknown }> }).choices;
+  const first = choices?.[0];
+  return first && typeof first.finish_reason === "string" ? first.finish_reason : null;
+}
+
+export async function chatCompletionDetailed(
   transport: Transport,
   cfg: { baseUrl: string; apiKey: string; chatModel: string },
   messages: ChatMessage[],
   opts: ChatOptions = {},
-): Promise<string> {
+): Promise<ChatReply> {
   const res = await transport.postJson(
     buildChatUrl(cfg.baseUrl),
     buildHeaders(cfg.apiKey),
@@ -171,7 +210,16 @@ export async function chatCompletion(
     const detail = errorMessageFromPayload(res.json) ?? `HTTP ${res.status}`;
     throw new LlmError(detail, res.status, detail);
   }
-  return parseChatContent(res.json);
+  return { text: parseChatContent(res.json), finishReason: getFinishReason(res.json) };
+}
+
+export async function chatCompletion(
+  transport: Transport,
+  cfg: { baseUrl: string; apiKey: string; chatModel: string },
+  messages: ChatMessage[],
+  opts: ChatOptions = {},
+): Promise<string> {
+  return (await chatCompletionDetailed(transport, cfg, messages, opts)).text;
 }
 
 export async function embedTexts(

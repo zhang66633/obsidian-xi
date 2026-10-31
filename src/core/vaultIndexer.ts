@@ -53,6 +53,10 @@ export interface IndexerConfig {
   /** Obsidian 配置目录（用户可自定义；其中的文件一律不进索引） */
   configDir?: string;
   embedBatchSize?: number;
+  /** 向量请求失败重试次数（测试可调到 1） */
+  embedAttempts?: number;
+  /** 重试退避；默认用 window.setTimeout，测试可注入即时实现 */
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface IndexStats {
@@ -61,12 +65,48 @@ export interface IndexStats {
   vectors: number;
   /** 本次新算的向量数（0 = 缓存全命中） */
   embeddedNow: number;
+  /** 本次真正读盘的笔记数（增量同步时小于 files） */
+  readFiles: number;
 }
 
 export type ProgressFn = (phase: "sync" | "embed", done: number, total: number) => void;
 
 const CACHE_VERSION = 1;
 const DEFAULT_EMBED_BATCH = 16;
+const EMBED_ATTEMPTS = 3;
+const VOCAB_SCAN_LIMIT = 200;
+
+function defaultSleep(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
+/** 429 / 5xx / 网络层（status 0）值得重试；401 之类的配置错误立刻暴露 */
+function isRetryable(err: unknown): boolean {
+  if (err instanceof LlmError) {
+    return err.status === 0 || err.status === 429 || err.status >= 500;
+  }
+  return true;
+}
+
+async function withRetry<T>(
+  run: () => Promise<T>,
+  attempts: number,
+  sleep: (ms: number) => Promise<void>,
+): Promise<T> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      return await run();
+    } catch (err) {
+      lastError = err;
+      if (attempt === attempts - 1 || !isRetryable(err)) throw err;
+      await sleep(400 * 2 ** attempt);
+    }
+  }
+  throw lastError;
+}
 
 /** 路径排除判定：文件夹或其子路径 */
 export function isExcluded(path: string, folders: string[]): boolean {
@@ -88,6 +128,8 @@ interface CacheFile {
 export class VaultIndexer {
   index = new NoteIndex();
   store: VectorStore = new VectorStoreClass();
+  /** 标签词表缓存：全库读取很贵，一次同步周期内只算一次 */
+  private vocabCache: string[] | null = null;
 
   constructor(
     private port: VaultPort,
@@ -101,6 +143,13 @@ export class VaultIndexer {
       { baseUrl: this.cfg.baseUrl, apiKey: this.cfg.apiKey, embeddingModel: this.cfg.embeddingModel },
       texts,
     );
+  }
+
+  /** 换 embedding 模型时清空内存索引与向量（磁盘缓存按 model 字段自然失效） */
+  reset(): void {
+    this.index = new NoteIndex();
+    this.store = new VectorStoreClass();
+    this.vocabCache = null;
   }
 
   /** 读缓存；模型变了返回 false 且不清库（由调用方决定是否强制重建） */
@@ -129,15 +178,28 @@ export class VaultIndexer {
     return isExcluded(path, this.cfg.excludeFolders);
   }
 
-  /** 全量同步 + 增量 embedding。返回统计与本次新算向量数 */
-  async syncAll(onProgress?: ProgressFn): Promise<IndexStats> {
+  /** 全量/增量同步 + 增量 embedding。
+   *  full=false（默认）：mtime 未变且已有索引的笔记不读盘，直接复用旧 chunk；
+   *  full=true：手动重建时全部重读（防同步工具保留 mtime 的漏检）。 */
+  async syncAll(onProgress?: ProgressFn, options: { full?: boolean } = {}): Promise<IndexStats> {
     const files = this.port.listMarkdownFiles().filter((f) => !this.isExcludedPath(f.path));
+    const allPaths = files.map((f) => f.path);
 
-    onProgress?.("sync", 0, files.length);
-    const inputs: FileInputLite[] = [];
+    // 先只做「要不要读」的廉价判断；mtime 没变就不读盘（大库从 O(全库读取) 降到 O(变更文件)）
+    const toRead: NoteFile[] = [];
     for (const f of files) {
+      if (!options.full) {
+        const meta = this.index.noteMeta(f.path);
+        if (meta && meta.mtime === f.mtime) continue;
+      }
+      toRead.push(f);
+    }
+
+    onProgress?.("sync", 0, toRead.length);
+    const inputs: FileInputLite[] = [];
+    for (const f of toRead) {
       inputs.push({ path: f.path, mtime: f.mtime, content: await this.port.readNote(f.path) });
-      onProgress?.("sync", inputs.length, files.length);
+      onProgress?.("sync", inputs.length, toRead.length);
     }
 
     // 先记下每个文件同步前的 chunk id：文件只要被改/删，它的旧向量全部作废。
@@ -146,7 +208,7 @@ export class VaultIndexer {
     const oldIdsByPath = new Map<string, string[]>();
     for (const f of files) oldIdsByPath.set(f.path, this.index.chunkIdsOf(f.path));
 
-    const sync = this.index.sync(inputs);
+    const sync = this.index.sync(inputs, { allPaths });
     const changed = new Set([...sync.added, ...sync.updated, ...sync.removed]);
     const staleIds = new Set<string>();
     for (const path of changed) {
@@ -165,23 +227,41 @@ export class VaultIndexer {
     const missing: Chunk[] = this.index.allChunks().filter((c) => !this.store.has(c.id));
     const batchSize = Math.max(1, this.cfg.embedBatchSize ?? DEFAULT_EMBED_BATCH);
     let embeddedNow = 0;
-    for (let i = 0; i < missing.length; i += batchSize) {
-      const slice = missing.slice(i, i + batchSize);
-      const vectors = await this.embedInputs(slice.map((c) => c.text));
-      vectors.forEach((v, j) => {
-        const chunk = slice[j];
-        if (chunk) this.store.upsert(chunk.id, v);
-      });
-      embeddedNow += slice.length;
-      onProgress?.("embed", Math.min(i + slice.length, missing.length), missing.length);
+    try {
+      for (let i = 0; i < missing.length; i += batchSize) {
+        const slice = missing.slice(i, i + batchSize);
+        const vectors = await withRetry(
+          () => this.embedInputs(slice.map((c) => c.text)),
+          this.cfg.embedAttempts ?? EMBED_ATTEMPTS,
+          this.cfg.sleep ?? defaultSleep,
+        );
+        if (vectors.length !== slice.length) {
+          throw new LlmError(`Embedding count mismatch: expected ${slice.length}, got ${vectors.length}`, 200);
+        }
+        const first = vectors[0];
+        if (first) this.store.ensureModel(this.cfg.embeddingModel, first.length);
+        vectors.forEach((v, j) => {
+          const chunk = slice[j];
+          if (chunk) this.store.upsert(chunk.id, v);
+        });
+        embeddedNow += slice.length;
+        onProgress?.("embed", Math.min(i + slice.length, missing.length), missing.length);
+      }
+    } catch (err) {
+      // 向量没算完也要把文本索引落盘：下次同步只补缺的向量，不用重切全库
+      this.vocabCache = null;
+      await this.persist();
+      throw err;
     }
 
+    this.vocabCache = null;
     await this.persist();
     return {
       files: this.index.notePaths().length,
       chunks: this.index.allChunks().length,
       vectors: this.store.size,
       embeddedNow,
+      readFiles: inputs.length,
     };
   }
 
@@ -212,12 +292,17 @@ export class VaultIndexer {
     return { hits, context };
   }
 
-  stats(): Omit<IndexStats, "embeddedNow"> {
+  stats(): { files: number; chunks: number; vectors: number } {
     return {
       files: this.index.notePaths().length,
       chunks: this.index.allChunks().length,
       vectors: this.store.size,
     };
+  }
+
+  /** 文件内容/排除范围变化后，下次 tagVocabulary 重新扫描 */
+  invalidateVocabulary(): void {
+    this.vocabCache = null;
   }
 
   /* ---------- Phase 3 整理能力 ---------- */
@@ -252,12 +337,14 @@ export class VaultIndexer {
     return findDuplicatePairs(notes, threshold ?? Math.min(0.95, this.cfg.similarityThreshold + 0.05));
   }
 
-  /** 全库标签词表（供标签建议优先复用） */
+  /** 全库标签词表（供标签建议优先复用）；结果缓存到下次同步 */
   async tagVocabulary(limit = 60): Promise<string[]> {
+    if (this.vocabCache !== null) return this.vocabCache.slice(0, limit);
     const files = this.port.listMarkdownFiles().filter((f) => !this.isExcludedPath(f.path));
     const contents: string[] = [];
     for (const f of files) contents.push(await this.port.readNote(f.path));
-    return extractTagVocabulary(contents, limit).map((v) => v.tag);
+    this.vocabCache = extractTagVocabulary(contents, Math.max(limit, VOCAB_SCAN_LIMIT)).map((v) => v.tag);
+    return this.vocabCache.slice(0, limit);
   }
 
   /** 给一篇笔记建议标签（优先词表内） */

@@ -71,15 +71,37 @@ export interface DuplicatePair {
   score: number;
 }
 
-/** 近似重复：代表向量余弦 ≥ threshold 的笔记对（每对只出一次，a<b 字典序） */
+/** 向量 L2 范数（重复检测时预计算，避免每对都开方） */
+export function vectorNorm(vector: number[]): number {
+  let sum = 0;
+  for (const v of vector) sum += v * v;
+  return Math.sqrt(sum);
+}
+
+/** 点积（长度不一致时按较短者截断，与 cosineSimilarity 语义一致） */
+function dotProduct(a: number[], b: number[]): number {
+  const n = Math.min(a.length, b.length);
+  let dot = 0;
+  for (let i = 0; i < n; i++) dot += (a[i] ?? 0) * (b[i] ?? 0);
+  return dot;
+}
+
+/** 近似重复：代表向量余弦 ≥ threshold 的笔记对（每对只出一次，a<b 字典序）
+ *  优化：预计算每个代表向量的模长，配对时只算点积；不再每对开两次方。
+ *  注意：余弦对向量长度缩放不敏感（同方向不同模长余弦仍为 1），
+ *  所以不能用模长比做剪枝——这里保持暴力两两比较，结果精确。 */
 export function findDuplicatePairs(notes: NoteVector[], threshold: number): DuplicatePair[] {
   const pairs: DuplicatePair[] = [];
+  const norms = notes.map((n) => vectorNorm(n.vector));
   for (let i = 0; i < notes.length; i++) {
     for (let j = i + 1; j < notes.length; j++) {
       const a = notes[i];
       const b = notes[j];
       if (!a || !b) continue;
-      const score = cosineSimilarity(a.vector, b.vector);
+      const na = norms[i] ?? 0;
+      const nb = norms[j] ?? 0;
+      if (na === 0 || nb === 0) continue;
+      const score = dotProduct(a.vector, b.vector) / (na * nb);
       if (score >= threshold) {
         const [lo, hi] = a.path <= b.path ? [a.path, b.path] : [b.path, a.path];
         pairs.push({ a: lo ?? a.path, b: hi ?? b.path, score });

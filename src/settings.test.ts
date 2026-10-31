@@ -1,5 +1,13 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, mergeSettings, parseFolderList, folderListToText } from "./settings";
+import {
+  DEFAULT_SETTINGS,
+  isPathInFolder,
+  mergeSettings,
+  normalizeBaseUrl,
+  normalizeFolderPath,
+  parseFolderList,
+  folderListToText,
+} from "./settings";
 
 describe("mergeSettings", () => {
   it("垃圾输入 / null → 全部回退默认", () => {
@@ -51,6 +59,27 @@ describe("mergeSettings", () => {
     expect(DEFAULT_SETTINGS.baseUrl).toBe("https://token.nau.edu.cn/v1");
     expect(DEFAULT_SETTINGS.chatModel).toBe("qwen3.8-27b");
     expect(DEFAULT_SETTINGS.embeddingModel).toBe("qwen3-embedding-8b");
+  });
+
+  it("输入/输出 token 也钳制：旧 data.json 里的 90000 输出会被收回", () => {
+    expect(mergeSettings({ maxInputTokens: 1 }).maxInputTokens).toBe(1000);
+    expect(mergeSettings({ maxInputTokens: 10_000_000 }).maxInputTokens).toBe(200_000);
+    expect(mergeSettings({ maxOutputTokens: 90_000 }).maxOutputTokens).toBe(65_536);
+    expect(mergeSettings({ maxOutputTokens: 1 }).maxOutputTokens).toBe(256);
+  });
+
+  it("baseUrl 缺协议时补 https；文件夹统一斜杠", () => {
+    expect(normalizeBaseUrl("host/v1/")).toBe("https://host/v1");
+    expect(normalizeBaseUrl("http://localhost:11434/v1")).toBe("http://localhost:11434/v1");
+    expect(mergeSettings({ excludeFolders: ["//日记\\\\", "  "] }).excludeFolders).toEqual(["日记"]);
+  });
+
+  it("文件夹包含判定：自身与子路径命中，前缀相似的旁系不命中", () => {
+    expect(isPathInFolder("日记/2026/a.md", "日记")).toBe(true);
+    expect(isPathInFolder("日记", "/日记/")).toBe(true);
+    expect(isPathInFolder("日记2/a.md", "日记")).toBe(false);
+    expect(isPathInFolder("a.md", "")).toBe(false);
+    expect(normalizeFolderPath("\\a\\b\\")).toBe("a/b");
   });
 });
 

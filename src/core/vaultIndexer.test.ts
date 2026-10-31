@@ -9,11 +9,13 @@ class FakePort implements VaultPort {
   contents = new Map<string, string>();
   cache: string | null = null;
   cacheWrites = 0;
+  reads = 0;
 
   listMarkdownFiles(): NoteFile[] {
     return this.files;
   }
   async readNote(path: string): Promise<string> {
+    this.reads++;
     return this.contents.get(path) ?? "";
   }
   async readCache(): Promise<string | null> {
@@ -296,5 +298,113 @@ describe("Phase 3 整理能力", () => {
     const tags = await idx.suggestTags("a.md");
     expect(tags).toEqual(["注意力", "学习方法"]);
     expect(t.chatCalls).toBe(1);
+  });
+});
+
+describe("增量同步与容错（0.5.0）", () => {
+  it("mtime 未变的笔记不读盘：只读变更文件", async () => {
+    const port = new FakePort();
+    seed(port, "a.md", 1, "# A\n内容");
+    seed(port, "b.md", 1, "# B\n内容");
+    const idx = new VaultIndexer(port, baseCfg(), makeTransport());
+    await idx.syncAll();
+    port.reads = 0;
+
+    port.contents.set("a.md", "# A\n改过的内容");
+    port.files[0]!.mtime = 2;
+    const stats = await idx.syncAll();
+    expect(stats.readFiles).toBe(1);
+    expect(port.reads).toBe(1);
+    expect(stats.embeddedNow).toBe(1);
+  });
+
+  it("只改 mtime 不改内容：不重切、不重嵌，只多读一次", async () => {
+    const port = new FakePort();
+    seed(port, "a.md", 1, "# A\n内容");
+    const idx = new VaultIndexer(port, baseCfg(), makeTransport());
+    await idx.syncAll();
+    port.reads = 0;
+
+    port.files[0]!.mtime = 99; // touch
+    const stats = await idx.syncAll();
+    expect(port.reads).toBe(1);
+    expect(stats.embeddedNow).toBe(0);
+    expect(stats.chunks).toBe(1);
+  });
+
+  it("full=true：全部重读（手动重建防 mtime 骗人）", async () => {
+    const port = new FakePort();
+    seed(port, "a.md", 1, "# A\n内容");
+    seed(port, "b.md", 1, "# B\n内容");
+    const idx = new VaultIndexer(port, baseCfg(), makeTransport());
+    await idx.syncAll();
+    port.reads = 0;
+    const stats = await idx.syncAll(undefined, { full: true });
+    expect(stats.readFiles).toBe(2);
+    expect(port.reads).toBe(2);
+  });
+
+  it("标签词表缓存：第二次不再读全库；同步后失效", async () => {
+    const port = new FakePort();
+    seed(port, "a.md", 1, "# A #标签甲");
+    seed(port, "b.md", 1, "# B #标签乙");
+    const idx = new VaultIndexer(port, baseCfg(), makeTransport());
+    await idx.syncAll();
+
+    port.reads = 0;
+    await idx.tagVocabulary();
+    const first = port.reads;
+    expect(first).toBe(2);
+    port.reads = 0;
+    await idx.tagVocabulary();
+    expect(port.reads).toBe(0);
+
+    port.contents.set("a.md", "# A #标签丙");
+    port.files[0]!.mtime = 2;
+    await idx.syncAll();
+    port.reads = 0;
+    await idx.tagVocabulary();
+    expect(port.reads).toBe(2);
+  });
+
+  it("embedding 500 自动重试后成功", async () => {
+    const port = new FakePort();
+    seed(port, "a.md", 1, "# A\n内容");
+    let calls = 0;
+    const transport: Transport = {
+      async postJson(url, _headers, body) {
+        if (String(url).endsWith("/embeddings")) {
+          calls++;
+          if (calls === 1) return { status: 500, ok: false, json: { error: { message: "boom" } } };
+          const input = (body as { input: string[] }).input;
+          return {
+            status: 200,
+            ok: true,
+            json: { data: input.map((_t, i) => ({ index: i, embedding: [1, 0] })) },
+          };
+        }
+        return { status: 200, ok: true, json: { choices: [{ message: { content: "ok" } }] } };
+      },
+    };
+    const idx = new VaultIndexer(port, { ...baseCfg(), embedAttempts: 2, sleep: async () => {} }, transport);
+    const stats = await idx.syncAll();
+    expect(calls).toBe(2);
+    expect(stats.embeddedNow).toBe(1);
+  });
+
+  it("embedding 最终失败：文本索引先落盘，下次只补向量", async () => {
+    const port = new FakePort();
+    seed(port, "a.md", 1, "# A\n内容");
+    const transport: Transport = {
+      async postJson() {
+        return { status: 500, ok: false, json: { error: { message: "down" } } };
+      },
+    };
+    const idx = new VaultIndexer(port, { ...baseCfg(), embedAttempts: 1 }, transport);
+    await expect(idx.syncAll()).rejects.toThrow(/down/);
+    expect(port.cache).not.toBeNull();
+    const saved = JSON.parse(port.cache!) as { index: { notes: Record<string, unknown> } };
+    expect(saved.index.notes["a.md"]).toBeDefined();
+    expect(idx.stats().vectors).toBe(0);
   });
 });

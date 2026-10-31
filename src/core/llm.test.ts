@@ -7,6 +7,7 @@ import {
   buildEmbedUrl,
   buildHeaders,
   chatCompletion,
+  chatCompletionDetailed,
   embedTexts,
   joinUrl,
   parseChatContent,
@@ -70,6 +71,21 @@ describe("URL 与请求构造", () => {
 describe("parseChatContent", () => {
   it("正常提取 assistant 文本", () => {
     expect(parseChatContent({ choices: [{ message: { content: "答案" } }] })).toBe("答案");
+  });
+
+  it("兼容 parts 数组形态的 content", () => {
+    expect(
+      parseChatContent({
+        choices: [{ message: { content: [{ type: "text", text: "前半" }, "后半"] } }],
+      }),
+    ).toBe("前半后半");
+    expect(
+      parseChatContent({ choices: [{ message: { content: { type: "text", text: "单段" } } }] }),
+    ).toBe("单段");
+  });
+
+  it("空 parts 数组按空内容处理（不返回空串冒充答案）", () => {
+    expect(() => parseChatContent({ choices: [{ message: { content: [] } }] })).toThrow(LlmError);
   });
 
   it("网关错误 payload → 抛 LlmError 且带 message", () => {
@@ -149,6 +165,14 @@ describe("chatCompletion / embedTexts（fake transport）", () => {
       expect((e as LlmError).status).toBe(401);
       expect((e as LlmError).message).toBe("invalid api key");
     }
+  });
+
+  it("chatCompletionDetailed 暴露 finish_reason，供 UI 提示截断", async () => {
+    const { transport } = fakeTransport(200, {
+      choices: [{ message: { content: "半句" }, finish_reason: "length" }],
+    });
+    const out = await chatCompletionDetailed(transport, cfg, [{ role: "user", content: "hi" }]);
+    expect(out).toEqual({ text: "半句", finishReason: "length" });
   });
 
   it("embeddings：多文本一次请求，按输入顺序返回", async () => {

@@ -157,11 +157,41 @@ describe("SessionStore 持久化", () => {
 });
 
 describe("sessionLabel", () => {
-  it("空标题用占位，带 HH:mm", () => {
+  it("空标题用占位 + HH:mm；有标题只显示标题（给窄侧栏省空间）", () => {
     const { store } = makeStore();
     const s = store.ensureActive();
-    expect(sessionLabel(s, "新会话")).toMatch(/新会话 · \d{2}:\d{2}/);
+    expect(sessionLabel(s, "新会话")).toMatch(/^新会话 \d{2}:\d{2}$/);
     store.rename(s.id, "有标题");
-    expect(sessionLabel(s, "新会话")).toContain("有标题");
+    expect(sessionLabel(s, "新会话")).toBe("有标题");
+  });
+});
+
+describe("SessionStore 写入串行化（0.5.0）", () => {
+  it("先发起的慢写入不会覆盖后发起的新快照", async () => {
+    const writes: string[] = [];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let first = true;
+    const store = new SessionStore(
+      async (data) => {
+        if (first) {
+          first = false;
+          await gate;
+        }
+        writes.push(String(data.sessions[0]?.messages.length ?? 0));
+      },
+      async () => null,
+    );
+
+    const s = store.ensureActive();
+    store.append(s.id, user("hi"));
+    await Promise.resolve();
+    release();
+    await store.flush();
+
+    expect(writes).toEqual(["0", "1"]);
+    expect(store.active?.messages).toHaveLength(1);
   });
 });
