@@ -534,3 +534,303 @@
     min-width: 0;
   }
 }
+
+/* ---------- 0.6.0：整理/整合面板的索引状态与结果卡片 ---------- */
+
+.lingxi-index-banner {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--background-secondary);
+}
+
+.lingxi-index-banner.is-warning {
+  border-color: var(--background-modifier-error);
+}
+
+.lingxi-index-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.lingxi-index-text {
+  flex: 1;
+  min-width: 140px;
+  font-size: var(--font-ui-smallest);
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.lingxi-index-partial {
+  margin-top: 2px;
+  color: var(--text-warning);
+  font-size: var(--font-ui-smallest);
+}
+
+.lingxi-index-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.lingxi-index-actions .lingxi-mini-btn,
+.lingxi-result-actions .lingxi-mini-btn,
+.lingxi-toolbar .lingxi-mini-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: auto;
+}
+
+.lingxi-index-actions svg,
+.lingxi-result-actions svg,
+.lingxi-mini-btn svg {
+  width: 13px;
+  height: 13px;
+}
+
+.lingxi-index-status {
+  margin-top: 4px;
+  font-size: var(--font-ui-smallest);
+  color: var(--text-muted);
+}
+
+.lingxi-org-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.lingxi-org-current-path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lingxi-link-btn {
+  border: none;
+  background: transparent;
+  color: var(--text-accent);
+  cursor: pointer;
+  font-size: var(--font-ui-smallest);
+  padding: 0 4px;
+}
+
+.lingxi-link-btn:hover {
+  text-decoration: underline;
+}
+
+.lingxi-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.lingxi-count {
+  font-size: var(--font-ui-smallest);
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.lingxi-result-card {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  padding: 7px 9px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  background: var(--background-primary);
+}
+
+.lingxi-result-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.lingxi-result-title {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  border: none;
+  background: transparent;
+  color: var(--text-normal);
+  cursor: pointer;
+  font-size: var(--font-ui-smallest);
+  font-weight: 600;
+  padding: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lingxi-result-title:hover {
+  color: var(--text-accent);
+}
+
+.lingxi-result-meta {
+  font-size: var(--font-ui-smallest);
+  color: var(--text-muted);
+}
+
+.lingxi-snippet {
+  font-size: var(--font-ui-smallest);
+  color: var(--text-muted);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.lingxi-result-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+
+.lingxi-tag-current {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  font-size: var(--font-ui-smallest);
+}
+
+.lingxi-tag-current-label {
+  color: var(--text-muted);
+}
+
+.lingxi-tag-empty {
+  color: var(--text-faint);
+}
+
+.lingxi-tag-chip {
+  border-radius: 999px;
+  padding: 1px 7px;
+  font-size: var(--font-ui-smallest);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+.lingxi-tag-chip.is-current {
+  background: var(--background-secondary);
+  color: var(--text-normal);
+}
+
+.lingxi-tag-auto {
+  flex-basis: 100%;
+  color: var(--text-accent);
+  font-size: var(--font-ui-smallest);
+}
+
+.lingxi-source-chips {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  margin: 2px 0 4px;
+}
+
+.lingxi-source-label {
+  font-size: var(--font-ui-smallest);
+  color: var(--text-muted);
+}
+
+.lingxi-source-chip {
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-muted);
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: var(--font-ui-smallest);
+  cursor: pointer;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.lingxi-source-chip:hover {
+  color: var(--text-normal);
+  border-color: var(--interactive-accent);
+}
+
+.lingxi-draft-edit {
+  width: 100%;
+  min-height: 180px;
+  resize: vertical;
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smallest);
+  line-height: 1.5;
+  padding: 8px;
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+}
+
+.lingxi-draft-meta {
+  font-size: var(--font-ui-smallest);
+  color: var(--text-muted);
+}
+
+.lingxi-raw {
+  max-height: 280px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: var(--font-ui-smallest);
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 8px;
+  margin: 4px 0;
+}
+
+.lingxi-gap-context {
+  font-size: var(--font-ui-smallest);
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.lingxi-picker-toolbar {
+  display: flex;
+  gap: 6px;
+  margin: 6px 0;
+}
+
+.lingxi-picker-toolbar button {
+  font-size: var(--font-ui-smallest);
+  padding: 3px 8px;
+}
+
+.lingxi-picker-count {
+  font-size: var(--font-ui-smallest);
+  color: var(--text-muted);
+  margin: 4px 0;
+}
+
+.lingxi-picker-empty {
+  padding: 20px;
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--font-ui-smallest);
+}
+
+@media (max-width: 480px) {
+  .lingxi-index-row {
+    align-items: flex-start;
+  }
+
+  .lingxi-result-head {
+    flex-wrap: wrap;
+  }
+}
+

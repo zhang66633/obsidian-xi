@@ -41,6 +41,11 @@ export default class LingxiPlugin extends Plugin {
   /** 最近一次索引进度（供 UI 展示） */
   indexStatus = "";
 
+  /** 索引任务是否在跑（面板用它决定是否显示进度文案） */
+  get indexingActive(): boolean {
+    return this.indexing;
+  }
+
   async onload(): Promise<void> {
     this.settings = mergeSettings(await this.loadData());
     this.i18n = new I18n(resolveLang(this.settings.language, this.getObsidianLocale()));
