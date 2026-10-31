@@ -1,10 +1,16 @@
 /**
  * 希XI — 重命名会话弹窗
  * 不用 window.prompt：Electron 里行为不稳，且样式不可控。
- * 关闭路径分级：Enter / 「确定」= 保存新标题；Esc / 遮罩 / 「取消」= 放弃修改。
+ * 关闭路径分级：Enter / 「保存」= 保存新标题；Esc / 遮罩 / 「取消」= 放弃修改。
  */
 
 import { App, Modal } from "obsidian";
+
+export interface RenameModalLabels {
+  title: string;
+  cancel: string;
+  save: string;
+}
 
 export class RenameModal extends Modal {
   private value: string;
@@ -13,6 +19,7 @@ export class RenameModal extends Modal {
   constructor(
     app: App,
     currentTitle: string,
+    private labels: RenameModalLabels,
     private done: (newTitle: string | null) => void,
   ) {
     super(app);
@@ -30,7 +37,7 @@ export class RenameModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("lingxi-modal");
-    contentEl.createEl("h3", { text: "重命名会话 / rename session" });
+    contentEl.createEl("h3", { text: this.labels.title });
 
     const input = contentEl.createEl("input", { cls: "lingxi-org-input" });
     input.value = this.value;
@@ -50,10 +57,10 @@ export class RenameModal extends Modal {
     });
     window.setTimeout(() => input.focus(), 50);
 
-    const btns = contentEl.createDiv( { cls: "lingxi-modal-btns" });
-    const cancel = btns.createEl("button", { text: "取消 / cancel" });
+    const btns = contentEl.createDiv({ cls: "lingxi-modal-btns" });
+    const cancel = btns.createEl("button", { text: this.labels.cancel });
     cancel.addEventListener("click", () => this.finish(null));
-    const ok = btns.createEl("button", { cls: "mod-cta", text: "确定 / save" });
+    const ok = btns.createEl("button", { cls: "mod-cta", text: this.labels.save });
     ok.addEventListener("click", () => {
       const t = this.value.trim();
       this.finish(t === "" ? null : t);

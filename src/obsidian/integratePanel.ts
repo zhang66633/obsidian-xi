@@ -88,9 +88,19 @@ export class IntegratePanel {
   private pickNotes(): Promise<TFile[]> {
     return new Promise((resolve) => {
       const files = this.plugin.app.vault.getMarkdownFiles();
-      new MultiFileModal(this.plugin.app, files, this.t("integrate.picker.title"), (picked) => {
-        resolve(picked.slice(0, MAX_PICK));
-      }).open();
+      new MultiFileModal(
+        this.plugin.app,
+        files,
+        {
+          title: this.t("integrate.picker.title"),
+          search: this.t("picker.search"),
+          cancel: this.t("picker.cancel"),
+          confirm: this.t("picker.confirm"),
+        },
+        (picked) => {
+          resolve(picked.slice(0, MAX_PICK));
+        },
+      ).open();
     });
   }
 
@@ -178,16 +188,23 @@ export class IntegratePanel {
     const btn = box.createEl("button", { cls: "lingxi-mini-btn mod-cta", text: label });
     btn.addEventListener("click", () => {
       void (async () => {
-        const content = build();
-        const stamp = new Date().toISOString().slice(0, 10);
-        let path = `lingxi-${stamp}.md`;
-        let n = 1;
-        while (await this.plugin.app.vault.adapter.exists(path)) {
-          path = `lingxi-${stamp}-${n++}.md`;
+        try {
+          const content = build();
+          const stamp = new Date().toISOString().slice(0, 10);
+          let path = `xi-${stamp}.md`;
+          let n = 1;
+          while (await this.plugin.app.vault.adapter.exists(path)) {
+            path = `xi-${stamp}-${n++}.md`;
+          }
+          await this.plugin.app.vault.create(path, content);
+          await this.plugin.app.workspace.openLinkText(path.replace(/\.md$/, ""), "", false);
+          new Notice(this.t("integrate.created"));
+          btn.disabled = true;
+        } catch (err) {
+          new Notice(
+            `${this.t("chat.failed")}: ${err instanceof Error ? err.message : String(err)}`,
+          );
         }
-        await this.plugin.app.vault.create(path, content);
-        await this.plugin.app.workspace.openLinkText(path.replace(/\.md$/, ""), "", false);
-        new Notice(this.t("integrate.created"));
       })();
     });
   }

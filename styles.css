@@ -1,4 +1,4 @@
-/* 灵犀 Lingxi — 样式
+/* 希XI — 样式
    原则：尽量复用 Obsidian 原生 CSS 变量，保证跟随用户主题；浅深两主题通用。 */
 
 .lingxi-root {
@@ -214,12 +214,6 @@
   gap: 6px;
   padding: 6px 12px;
   border-bottom: 1px solid var(--background-modifier-border);
-}
-
-.lingxi-session-label {
-  font-size: var(--font-ui-smallest);
-  color: var(--text-muted);
-  flex-shrink: 0;
 }
 
 .lingxi-session-select {
@@ -442,4 +436,101 @@
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* ---------- 0.5.0：Markdown 回答 / 空状态 / 复制 / 设置页 ---------- */
+
+.lingxi-lang-btn {
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.lingxi-msg-text.markdown-rendered {
+  white-space: normal;
+}
+
+.lingxi-msg-text.markdown-rendered > :first-child {
+  margin-top: 0;
+}
+
+.lingxi-msg-text.markdown-rendered > :last-child {
+  margin-bottom: 0;
+}
+
+.lingxi-msg-text.markdown-rendered p {
+  margin: 0 0 0.5em;
+}
+
+.lingxi-msg-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  margin-top: 4px;
+  opacity: 0.45;
+  transition: opacity 120ms ease;
+}
+
+.lingxi-msg:hover .lingxi-msg-actions,
+.lingxi-msg:focus-within .lingxi-msg-actions {
+  opacity: 1;
+}
+
+.lingxi-msg-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  padding: 2px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.lingxi-msg-copy:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+.lingxi-msg-copy svg {
+  width: 14px;
+  height: 14px;
+}
+
+.lingxi-empty {
+  padding: 36px 16px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.lingxi-empty-title {
+  font-size: var(--font-ui-medium);
+  font-weight: 600;
+  color: var(--text-normal);
+  margin-bottom: 6px;
+}
+
+.lingxi-empty-desc {
+  font-size: var(--font-ui-small);
+  line-height: 1.6;
+}
+
+.lingxi-modal-body {
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+  line-height: 1.6;
+  margin: 8px 0 4px;
+}
+
+.lingxi-settings-textarea {
+  width: 100%;
+  min-width: 260px;
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-smaller);
+}
+
+@media (max-width: 480px) {
+  .lingxi-settings-textarea {
+    min-width: 0;
+  }
 }

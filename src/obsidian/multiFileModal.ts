@@ -6,6 +6,13 @@
 
 import { App, Modal, Setting, TFile } from "obsidian";
 
+export interface MultiFileModalLabels {
+  title: string;
+  search: string;
+  cancel: string;
+  confirm: string;
+}
+
 export class MultiFileModal extends Modal {
   private chosen = new Set<string>();
   private filtered: TFile[];
@@ -13,7 +20,7 @@ export class MultiFileModal extends Modal {
   constructor(
     app: App,
     private files: TFile[],
-    private titleText: string,
+    private labels: MultiFileModalLabels,
     private done: (files: TFile[]) => void,
   ) {
     super(app);
@@ -24,10 +31,10 @@ export class MultiFileModal extends Modal {
     const { contentEl } = this;
     contentEl.empty();
     contentEl.addClass("lingxi-modal");
-    contentEl.createEl("h3", { text: this.titleText });
+    contentEl.createEl("h3", { text: this.labels.title });
 
     let query = "";
-    const listEl = contentEl.createDiv( { cls: "lingxi-picker-list" });
+    const listEl = contentEl.createDiv({ cls: "lingxi-picker-list" });
 
     const renderList = () => {
       listEl.empty();
@@ -43,12 +50,12 @@ export class MultiFileModal extends Modal {
           if (cb.checked) this.chosen.add(file.path);
           else this.chosen.delete(file.path);
         });
-        row.createSpan( { text: file.path });
+        row.createSpan({ text: file.path });
       }
     };
 
     new Setting(contentEl).addSearch((s) => {
-      s.setPlaceholder("搜索笔记…").onChange((v) => {
+      s.setPlaceholder(this.labels.search).onChange((v) => {
         query = v;
         renderList();
       });
@@ -56,13 +63,13 @@ export class MultiFileModal extends Modal {
 
     renderList();
 
-    const btns = contentEl.createDiv( { cls: "lingxi-modal-btns" });
-    const cancel = btns.createEl("button", { text: "取消" });
+    const btns = contentEl.createDiv({ cls: "lingxi-modal-btns" });
+    const cancel = btns.createEl("button", { text: this.labels.cancel });
     cancel.addEventListener("click", () => {
       this.chosen.clear();
       this.close();
     });
-    const ok = btns.createEl("button", { cls: "mod-cta", text: "确定" });
+    const ok = btns.createEl("button", { cls: "mod-cta", text: this.labels.confirm });
     ok.addEventListener("click", () => this.close());
   }
 

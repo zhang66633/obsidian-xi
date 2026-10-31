@@ -1,21 +1,24 @@
 /**
  * 希XI — Obsidian 侧 VaultPort 实现
- * 缓存落在插件目录：<configDir>/plugins/xi-qwen/cache.json
- * （configDir 跟随用户自定义的配置文件夹，不写死 .obsidian）
+ * 缓存落在插件目录：<plugin dir>/cache.json
+ * （目录由 main 用 manifest.dir 传入，跟随用户自定义的配置文件夹/插件目录）
  */
 
-import { App, TFile } from "obsidian";
+import { App, TFile, normalizePath } from "obsidian";
 import type { NoteFile, VaultPort } from "../core/vaultIndexer";
 
 export class ObsidianVaultPort implements VaultPort {
-  constructor(private app: App) {}
-
-  private cachePath(): string {
-    return `${this.app.vault.configDir}/plugins/xi-qwen/cache.json`;
-  }
+  constructor(
+    private app: App,
+    private pluginDir: string,
+  ) {}
 
   private cacheDir(): string {
-    return `${this.app.vault.configDir}/plugins/xi-qwen`;
+    return normalizePath(this.pluginDir).replace(/\/+$/, "");
+  }
+
+  private cachePath(): string {
+    return `${this.cacheDir()}/cache.json`;
   }
 
   listMarkdownFiles(): NoteFile[] {
@@ -23,7 +26,7 @@ export class ObsidianVaultPort implements VaultPort {
   }
 
   async readNote(path: string): Promise<string> {
-    const file = this.app.vault.getAbstractFileByPath(path);
+    const file = this.app.vault.getAbstractFileByPath(normalizePath(path));
     if (file instanceof TFile) return this.app.vault.cachedRead(file);
     return "";
   }

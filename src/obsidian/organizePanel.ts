@@ -30,9 +30,9 @@ export class OrganizePanel {
     c.empty();
     c.addClass("lingxi-organize");
 
-    const noteEl = c.createDiv( { cls: "lingxi-org-current" });
+    const noteEl = c.createDiv({ cls: "lingxi-org-current" });
     const file = this.plugin.app.workspace.getActiveFile();
-    noteEl.setText(`${this.t("organize.currentNote")}：${file ? file.path : this.t("organize.noNote")}`);
+    noteEl.setText(`${this.t("organize.currentNote")}: ${file ? file.path : this.t("organize.noNote")}`);
 
     this.section("organize.related", "organize.related.hint", (body) => {
       const btn = body.createEl("button", { cls: "lingxi-mini-btn mod-cta", text: this.t("organize.related.run") });
@@ -189,7 +189,7 @@ export class OrganizePanel {
         // 白名单内：半自动直接应用
         for (const tag of tags) await this.applyTag(file, tag);
         const box = body.createDiv( { cls: "lingxi-results" });
-        box.createDiv( { cls: "lingxi-section-status", text: `${this.t("organize.tags.applied")}：${tags.join(" ")}` });
+        box.createDiv({ cls: "lingxi-section-status", text: `${this.t("organize.tags.applied")}: ${tags.join(" ")}` });
         return;
       }
       const box = body.createDiv( { cls: "lingxi-results lingxi-chips" });
